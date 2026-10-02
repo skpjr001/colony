@@ -1,0 +1,10 @@
+{
+  "name": "colony",
+  "private": true,
+  "packageManager": "pnpm@12.8.1",
+  "scripts": {
+    "build:admin": "pnpm --filter colony-admin build",
+    "deploy": "pnpm build:admin && pnpm --filter colony-api run deploy",
+    "test:core": "cargo test --manifest-path crates/colony-core/Cargo.toml"
+  }
+}

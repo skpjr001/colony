@@ -1,0 +1,32 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "colony-agent",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [
+      { "name": "ColonyAgent", "class_name": "ColonyAgent" },
+      { "name": "RUNNER", "class_name": "Runner" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ColonyAgent", "Runner"] }
+  ],
+  "containers": [
+    {
+      "class_name": "Runner",
+      "image": "./Dockerfile",
+      "instance_type": "lite",
+      "max_instances": 3
+    }
+  ],
+  "services": [
+    {
+      "binding": "COLONY",
+      "service": "colony",
+      "entrypoint": "ColonyRpc"
+    }
+  ]
+}

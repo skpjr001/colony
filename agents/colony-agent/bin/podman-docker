@@ -1,0 +1,88 @@
+#!/bin/bash
+set -euo pipefail
+
+registry_digest() {
+  python3 - "$1" << 'PY'
+import json, sys, urllib.request
+ref = sys.argv[1]
+if ref.startswith("docker://"):
+    ref = ref[len("docker://"):]
+host, path = ref.split("/", 1)
+auth = json.load(open("/run/user/1000/containers/auth.json"))["auths"][host]["auth"]
+headers = {
+    "Authorization": f"Basic {auth}",
+    "Accept": "application/vnd.docker.distribution.manifest.v2+json",
+}
+if "@" in path:
+    repo = path.split("@", 1)[0]
+    tags_url = f"https://{host}/v2/{repo}/tags/list"
+    with urllib.request.urlopen(urllib.request.Request(tags_url, headers=headers)) as res:
+        tags = [tag for tag in (json.load(res).get("tags") or []) if not tag.startswith("sha256:")]
+    if not tags:
+        raise SystemExit(1)
+    tag = tags[-1]
+else:
+    repo, tag = path.rsplit(":", 1)
+url = f"https://{host}/v2/{repo}/manifests/{tag}"
+req = urllib.request.Request(url, method="HEAD", headers=headers)
+with urllib.request.urlopen(req) as res:
+    digest = res.headers.get("Docker-Content-Digest")
+if not digest:
+    raise SystemExit(1)
+print(digest)
+PY
+}
+
+if [[ "${1:-}" == "image" && "${2:-}" == "inspect" && "${3:-}" == registry.cloudflare.com/* ]]; then
+  if digest="$(registry_digest "$3")"; then
+    repo="${3%:*}"
+    printf '["%s@%s"]\n' "$repo" "$digest"
+    exit 0
+  fi
+fi
+
+if [[ "${1:-}" == "manifest" && "${2:-}" == "inspect" ]]; then
+  ref=""
+  for arg in "$@"; do
+    if [[ "$arg" == registry.cloudflare.com/* ]]; then
+      ref="$arg"
+    fi
+  done
+  if [[ -n "$ref" ]] && digest="$(registry_digest "$ref")"; then
+    printf '{"Descriptor":{"digest":"%s"}}\n' "$digest"
+    exit 0
+  fi
+fi
+
+args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --provenance|--provenance=*|--load)
+      shift
+      ;;
+    -f)
+      args+=(-f)
+      shift
+      if [[ "${1:-}" == "-" ]]; then
+        tmp="$(mktemp)"
+        cat >"$tmp"
+        args+=("$tmp")
+        shift
+      else
+        args+=("$1")
+        shift
+      fi
+      ;;
+    *)
+      args+=("$1")
+      shift
+      ;;
+  esac
+done
+if [[ "${args[0]:-}" == "build" ]]; then
+  args=(build --format docker "${args[@]:1}")
+fi
+if [[ "${args[0]:-}" == "push" ]]; then
+  args=(push --format v2s2 "${args[@]:1}")
+fi
+exec podman "${args[@]}"

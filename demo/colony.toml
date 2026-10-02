@@ -1,0 +1,12 @@
+[claims]
+heartbeat_secs = 90
+lambda_per_min = 0.2
+min_strength = 0.2
+ttl_mins = 30
+
+[claims.sharding]
+enabled = true
+shards = ["src/*", "crates/*", "docs"]
+default_shard = "root"
+max_fanout = 8
+broad_claim_tier = "Senior"
